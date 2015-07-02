@@ -1,0 +1,11 @@
+avl_file
+========
+
+avl_file is a library for file-based threaded AVL-trees (height  balanced  binary
+trees) with multiple keys and concurrent access, using fixed length records in 
+single files.
+
+Instructions for using the library functions are in the 'man' page 
+avl_file(3).
+ 
+- Michael Williamson <michael.h.williamson@gmail.com>

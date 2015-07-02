@@ -1,0 +1,286 @@
+.\" Copyright (C) Michael Williamson <michael.h.williamson@gmail.com>
+.\"
+.\" Copying and distribution of this file, with or without modification,
+.\" are permitted in any medium without royalty provided the copyright
+.\" notice and this notice are preserved.
+.\"
+.TH AVL_FILE 3  2009-11-21
+.SH NAME
+AVL_FILE \- file-based AVL-tree functions.
+.SH SYNOPSIS
+.B #include <avl_file.h>
+.sp
+.BI "AVL_FILE *avl_file_open (char *" fname ", int32_t " len ", int32_t " n_keys ", avl_file_cmp_fn *" cmp ");"
+.br
+.BI "void avl_file_close (AVL_FILE *" ap ");"
+.br
+.BI " "
+.br
+.BI "int32_t avl_file_insert (AVL_FILE *" ap ", void *" data ");"
+.br
+.BI "int32_t avl_file_delete (AVL_FILE *" ap ", void *" data ");"
+.br
+.BI "int32_t avl_file_update (AVL_FILE *" ap ", void *" data ");"
+.br
+.BI " "
+.br
+.BI "int32_t avl_file_find (AVL_FILE *" ap ", void *" data ", int32_t " key ");"
+.br
+.BI "int32_t avl_file_startlt (AVL_FILE *" ap ", void *" data ", int32_t " key ");"
+.br
+.BI "int32_t avl_file_startge (AVL_FILE *" ap ", void *" data ", int32_t " key ");"
+.br
+.BI " "
+.br
+.BI "int32_t avl_file_prev (AVL_FILE *" ap ", void *" data ", int32_t " key ");"
+.br
+.BI "int32_t avl_file_next (AVL_FILE *" ap ", void *" data ", int32_t " key ");"
+.br
+.BI " "
+.br
+.BI "void avl_file_startseq (AVL_FILE *" ap ");"
+.br
+.BI "int32_t avl_file_readseq (AVL_FILE *" ap ", void *" data ");"
+.br
+.BI " "
+.br
+.BI "void avl_file_lock (AVL_FILE *" ap ");"
+.br
+.BI "void avl_file_unlock (AVL_FILE *" ap ");"
+.br
+.BI " "
+.br
+.BI "int64_t avl_file_getnum (AVL_FILE *" ap ");"
+.br
+.BI " "
+.br
+.BI "void avl_file_squash (AVL_FILE *" ap ");"
+.br
+.BI " "
+.br
+.BI "int32_t avl_file_scan (AVL_FILE *" ap ", int32_t " key ", off_t " off ", int64_t *" count ");"
+.br
+.SH DESCRIPTION
+These routines implement file-based threaded AVL-trees (height balanced
+binary trees) with multiple keys and concurrent access, using fixed 
+length records in single files. The keys are part of the record structures, 
+and so are not passed separately. A comparison function must be supplied 
+that takes as parameters two record structure pointers and also a key index, 
+to be used by these functions for the AVL-tree operations 
+of inserting, searching, and deleting. Thread-safe versions of the
+functions have '_t' appended to the end of the function name, i.e. 
+avl_file_open_t (), avl_file_insert_t (), etc.
+.PP
+The
+.B avl_file_open
+function opens the file 
+.IR fname ,
+creating it if it does not exist. The 
+.IR len 
+parameter sets the length of the records for the file, and it cannot
+change once the file is created.
+Subsequently for the file, calls to the functions that require
+record pointers must have  
+.I len
+size buffers. The 
+.I n_keys
+parameter is the number of keys for this file, and 
+.I cmp
+is a pointer to the comparison function, which takes a number from 0 to 
+n_keys\-1, and two pointers to records structures, and returns
+the result of the comparison for that key. The typedef 
+for the comparison function is:
+.PP
+typedef int32_t (*avl_file_cmp_fn_t) (int32_t, const void *, const void *);
+.PP
+The comparison function and data record format cannot be altered once an 
+AVL-tree file has been created. 
+.PP
+The 
+.B avl_file_insert
+function inserts a new data record into the file. Duplicate keys are 
+allowed. The
+.B avl_file_delete
+function deletes a record if it finds an exact match for the whole record.
+The record should be read first, since the whole record must match, and not
+just the key field. If duplicates exist, the one that is deleted is 
+arbitrary. The space left unused by deleted records gets re-used when new 
+records are added. The function
+.B avl_file_update
+finds a record with matching key(s), and replaces it.
+.PP
+The function
+.B avl_file_find
+searches the tree corresponding to key 
+.IR key ,
+which must be from zero to n_keys\-1, using the record structure pointed
+to by
+.IR data ,
+writing over that buffer if a record is found with a matching key.
+The 
+.B avl_file_startlt
+and
+.B avl_file_startge
+functions initialize tree pointers to point to the first record less than,
+and greater than or equal to respectively, for the 
+.I data
+and
+.I key
+supplied to these functions, and over-write the 
+.I data 
+buffer with the record if one is found.
+Subsequent calls to
+.B avl_file_prev
+or 
+.B avl_file_next
+retrieve file records in key order for the given 
+.IR key .
+.PP
+Unordered sequential retrieval of all the records in the file can be done
+by using the function
+.B avl_file_startseq
+to initialize the sequential access pointer, and the function
+.B avl_file_readseq 
+to get the next record.
+.PP
+The 
+.B avl_file_lock 
+and 
+.B avl_file_unlock
+functions apply and release co-operative locks to a file, respectively.
+.PP
+The function
+.B avl_file_getnum
+returns a sequential (unique) record number for use in a file. This is 
+provided for the case that a unique key is desired. 
+.PP
+The
+.B avl_file_squash
+function recovers space left over by deleted records, and shortens
+the file, if possible. For files opened by multiple processes, recovering
+all of the unused space is unlikely.
+.PP
+The 
+.B avl_file_scan
+function recursively traverses the tree given by 
+.IR key ,
+counting the number of records in the tree.
+The parameter 
+.I off
+must be passed as zero, and the int64_t pointer
+.I count
+must point to a value initialized to zero.
+.PP
+A file will be left in a corrupted state if the functions are interrupted 
+before completing. There is no provision for identifying or repairing a 
+corrupted file. The functions will call abort() if the system calls to lseek(), 
+read(), or write() fail for any reason, or if a corrupted file causes 
+an attempt to read beyond the end of file.
+.SH "RETURN VALUE"
+All of the functions that read or write records into the file return 
+zero for success, or -1 for failure.
+.PP
+Upon successful completion,
+.BR avl_file_open 
+returns an
+.B AVL_FILE
+pointer.  Otherwise,
+.B NULL
+is returned.
+.PP
+The
+.B avl_file_scan 
+function returns the tree height for key 
+.IR key.
+Also the number of records is returned in the 
+.I count
+parameter.
+.PP
+The
+.B avl_file_getnum 
+function returns unique sequential record numbers.
+.SH EXAMPLE
+An example program using two keys:
+.sp
+.nf
+#include "avl_file.h"
+
+#define RK_NUM               0     // key index
+#define RK_OBJ_NUM_REG       1
+
+struct r_struct {    // fixed data structure (including key fields)
+   int32_t num;
+   char object[24];
+   int32_t reg;
+   char data[100];
+};
+
+
+int32_t cmp_test (int32_t key, void *va, void *vb) {   // comparison function
+   struct r_struct *a, *b;
+   int32_t i;
+
+   a = (struct r_struct *) va;
+   b = (struct r_struct *) vb;
+
+   switch (key) {
+   case RK_NUM:
+      i = a->num - b->num;
+      break;
+   case RK_OBJ_NUM_REG:
+      i = strcmp (a->object, b->object);
+      if (i == 0) i = a->num - b->num;
+      if (i == 0) i = a->reg - b->reg;
+      break;
+   default:
+      fprintf (stderr, "cmp_r: invalid key\n");
+      break;
+   }
+   return (i);
+}
+
+int main (int argc, char *argv[]) {
+   AVL_FILE *ap;
+   struct r_struct r;
+   int32_t n;
+
+   //--- avl_file_open (fname, rec size, n_keys, cmp function)
+   ap = avl_file_open ("test.avl", sizeof (struct r_struct),
+                       2, (avl_file_cmp_fn_t) cmp_test);
+
+   r.num = 1;
+   strcpy (r.object, "GNU/Linux");
+   r.reg = 0;
+   strcpy (r.data, "SuSE");
+   avl_file_insert (ap, &r);
+
+   //...
+
+   r.num = 1;
+   n = avl_file_startge (ap, &r, RK_NUM);
+   while (n == 0) {
+      if (r.num > 1) break;
+
+      printf ("%s %s\n", r.object, r.data);
+      n = avl_file_next (ap, &r, RK_NUM);
+   }
+
+   avl_file_close (ap);
+}
+.fi
+.SH ERRORS
+Error messages are returned in an environment variable that is defined
+in the header file by the macro AVL_FILE_EMSG_VNAME. So, use
+the getenv() function for getting the error messages. This 
+environment variable is erased upon opening a file, but otherwise
+is not cleared again.
+.SH "CONFORMING TO"
+Not known.
+.SH "SEE ALSO"
+.BR libavl,
+.BR mysql (1),
+.BR qsort (3),
+.BR bsearch (3),
+.BR tsearch (3),
+.BR gdbm (3),
+
